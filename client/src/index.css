@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-ivory: #f7f4ec;
+  --color-paper: #fffdf8;
+  --color-line: #e6e0d2;
+  --color-ink: #0b1b33;
+  --color-ink-soft: #46546b;
+  --color-night: #07111f;
+  --color-teal: #0f766e;
+  --color-mint: #5eead4;
+  --color-ok: #047857;
+  --color-ok-bg: #e7f6ef;
+  --color-warn: #a35a00;
+  --color-warn-bg: #fdf1dc;
+  --color-bad: #b42318;
+  --color-bad-bg: #fdeceb;
+}
+
+html { scroll-behavior: smooth; }
+body { @apply bg-ivory text-ink font-sans antialiased; }
+@utility num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+@keyframes flow { to { stroke-dashoffset: -40; } }
+@keyframes pulse-zone { 0%,100% { opacity: .35 } 50% { opacity: .7 } }
+@keyframes rise { from { opacity: 0; transform: translateY(24px) } to { opacity: 1; transform: none } }
+@keyframes marquee { to { transform: translateX(-50%); } }
+.flow-line { stroke-dasharray: 6 14; animation: flow 1.6s linear infinite; }
+.pulse-zone { animation: pulse-zone 2.4s ease-in-out infinite; }
+.reveal { opacity: 0; }
+.reveal.in { animation: rise .9s cubic-bezier(.2,.7,.2,1) forwards; }
+.marquee { animation: marquee 40s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-line, .pulse-zone, .marquee { animation: none; }
+  .reveal { opacity: 1; }
+  .reveal.in { animation: none; }
+}
+
+.field { @apply w-full rounded-xl border border-line bg-paper px-4 py-3 text-ink num outline-none transition focus:border-teal focus:ring-4 focus:ring-teal/15; }
+.field[aria-invalid="true"] { @apply border-bad ring-4 ring-bad/10; }
+@utility btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal/30; }
+.btn-primary { @apply btn bg-ink text-ivory hover:bg-teal; }
+.btn-ghost { @apply btn border border-line bg-paper text-ink hover:border-ink; }
+.card { @apply rounded-3xl border border-line bg-paper; }
+.eyebrow { @apply text-xs font-semibold uppercase tracking-[0.18em] text-teal; }
