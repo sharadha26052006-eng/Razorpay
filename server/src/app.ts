@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { analyze, type Terms } from './calc.js';
 import { validateInput, validateTerms } from './validate.js';
-import { AIError, generateObjectionResponse, generateProposal } from './gemini.js';
+import { AIError, configuredModels, generateObjectionResponse, generateProposal } from './gemini.js';
 
 export function createApp(opts: { fetchImpl?: typeof fetch; staticDir?: string } = {}) {
   const app = express();
@@ -11,7 +11,8 @@ export function createApp(opts: { fetchImpl?: typeof fetch; staticDir?: string }
   app.use(express.json({ limit: '50kb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', aiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()) });
+    const [model, fallbackModel = null] = configuredModels();
+    res.json({ status: 'ok', aiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()), model, fallbackModel });
   });
 
   app.post('/api/analyze', (req, res) => {
@@ -44,9 +45,9 @@ export function createApp(opts: { fetchImpl?: typeof fetch; staticDir?: string }
       }
       res.json(await generateProposal(v.value, opts.fetchImpl));
     } catch (e) {
-      if (e instanceof AIError) return res.status(e.status).json({ error: e.message, code: e.code });
-      console.error(e);
-      res.status(500).json({ error: 'Unexpected server error while generating the proposal.' });
+      if (e instanceof AIError) return res.status(e.status).json({ error: e.message, code: e.code, retryable: e.retryable });
+      console.error('[negotiate] unexpected error:', e instanceof Error ? e.message : e); // message only: no stack or business data
+      res.status(500).json({ error: 'Unexpected server error while generating the proposal. Please try again.', code: 'SERVER_ERROR', retryable: true });
     }
   });
 

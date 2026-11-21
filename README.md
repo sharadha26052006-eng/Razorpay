@@ -65,17 +65,29 @@ npm run typecheck
 
 ## Gemini configuration
 
-1. Create a key at https://aistudio.google.com/apikey
-2. Put it in `.env` at the project root: `GEMINI_API_KEY=...`
-3. Optional: set `GEMINI_MODEL` (default `gemini-2.5-flash`).
-4. Restart the server. The key is read only by the backend. It never reaches the browser, and `/api/health` reports only `aiConfigured: true/false`.
+| Variable | Required | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | yes (for the copilot) | Key from https://aistudio.google.com/apikey. Read only by the backend. |
+| `GEMINI_MODEL` | no | Primary model. Default: `gemini-flash-latest` (Google's alias for the current Flash model). |
+| `GEMINI_FALLBACK_MODEL` | no | Second model used when the primary is overloaded, unavailable or out of daily quota, e.g. `gemini-flash-lite-latest`. |
+| `PORT` | no | Local default 3001; Render sets it automatically. |
 
-Without a key, the Copilot page shows a setup message and the API returns `503 AI_NOT_CONFIGURED`. The app never shows simulated AI output.
+The key never reaches the browser. `/api/health` reports only `aiConfigured`, `model` and `fallbackModel`. At startup the server checks both models against your key and logs whether each is available, for example `[gemini] primary model "gemini-flash-latest": available`.
+
+### Reliability (server/src/gemini.ts)
+- **Model verification:** each model is looked up once per process (`GET /v1beta/models/{model}`). A model that doesn't exist for your key is skipped.
+- **Retries:** each model gets up to **3 attempts** on temporary errors (HTTP 429 per-minute rate limit, 500/502/503/504, timeouts, network errors, malformed output), with exponential backoff of about 1 s and then 2 s, plus jitter.
+- **Fallback:** if the primary model keeps failing, is unavailable, or has used up its daily quota, the fallback model is tried, with up to 3 attempts of its own.
+- **No retries on permanent errors:** an invalid API key or a bad request is never retried.
+- **Hard limits:** 30 s per attempt and a 75 s total budget per request, so there are no infinite loops.
+- **Deduplication:** identical requests that are already in flight share one Gemini call.
+- **Logs:** only the model, attempt number, error code and Google's status are logged. Prompts, business figures and the key are never logged.
+- **Honest failures:** there are no simulated responses. If every attempt fails, the user gets a clear message, plus a **Try again** button when the error is temporary.
 
 ## API
 
 ### `GET /api/health`
-Returns `{ "status": "ok", "aiConfigured": boolean }`.
+Returns `{ "status": "ok", "aiConfigured": boolean, "model": string, "fallbackModel": string | null }`.
 
 ### `POST /api/analyze`
 ```json
@@ -95,7 +107,19 @@ If validation fails, the response is `400 { error, fields: { fieldName: message 
 - **Proposal:** `{ "input": {...} }` → `{ analysis, proposal: { riskSummary, biggestRisk, suggestedScenario, structureRationale, milestoneDescription, assumptions[], negotiationMessage } }`
 - **Objection:** `{ "input": {...}, "objection": "…", "message": "<the proposal sent>" }` → `{ response, tips[] }`
 
-Any figures the client sends are ignored, and the server recalculates everything from `input`. Errors look like `{ error, code }`. The possible codes are `AI_NOT_CONFIGURED` (503), `AI_TIMEOUT` (504), `AI_RATE_LIMITED` (429), and `AI_BAD_KEY`, `AI_MODEL`, `AI_UPSTREAM`, `AI_BAD_FORMAT` and `AI_EMPTY` (all 502).
+Any figures the client sends are ignored, and the server recalculates everything from `input`. Successful responses include `model`, the Gemini model that answered. Errors look like `{ error, code, retryable }`:
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| `AI_OVERLOADED` | 503 | yes | Gemini is overloaded or had a server error after all retries |
+| `AI_RATE_LIMITED` | 429 | yes | Per-minute rate limit |
+| `AI_TIMEOUT` | 504 | yes | Gemini didn't answer in time |
+| `AI_UNREACHABLE` | 502 | yes | Network failure reaching Gemini |
+| `AI_EMPTY` / `AI_BAD_FORMAT` | 502 | yes | Empty, blocked or malformed model output |
+| `AI_QUOTA` | 429 | no | Daily quota used up for every configured model |
+| `AI_BAD_KEY` | 502 | no | Invalid or unauthorised API key |
+| `AI_MODEL` | 502 | no | No configured model is available for this key |
+| `AI_NOT_CONFIGURED` | 503 | no | `GEMINI_API_KEY` is not set |
 
 ## Formulas (server/src/calc.ts)
 
@@ -145,7 +169,7 @@ termswise/
 
 ## Known limitations
 
-- The Gemini integration is covered by tests with a mocked API, but it was not run against the live Gemini API during development because no key was available. Try one real generation with your key before the demo.
+- The retry and fallback logic is covered by tests that use a mocked Gemini API. It hasn't been tested from the development sandbox against the live API, because no key is available there.
 - The model assumes production costs are paid upfront (day 0). It does not model costs spread over time, interest, GST or late-payment interest under the MSMED Act.
 - Data is stored only in the browser's localStorage. There are no accounts and no database.
 - This is decision support, not financial or legal advice. It cannot guarantee the outcome of any negotiation.
