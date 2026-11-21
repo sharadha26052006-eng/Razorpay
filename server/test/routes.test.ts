@@ -69,6 +69,12 @@ describe('POST /api/negotiate', () => {
     expect(r.body.proposal.suggestedScenario.terms.advancePercent).toBe(100);
     expect(r.body.proposal.suggestedScenario.terms.milestonePercent).toBe(0);
   });
+  it('defaults a missing or zero milestone day instead of showing "day 0"', async () => {
+    process.env.GEMINI_API_KEY = 'k';
+    const fetchImpl = geminiReply({ riskSummary: 'S', negotiationMessage: 'M', suggestedAdvancePercent: 20, suggestedMilestonePercent: 30, suggestedMilestoneDays: 0, suggestedPaymentDays: 45 });
+    const r = await request(createApp({ fetchImpl })).post('/api/negotiate').send({ input: demo });
+    expect(r.body.proposal.suggestedScenario.terms.milestoneDays).toBe(30);
+  });
   it('maps upstream failures to clear errors', async () => {
     process.env.GEMINI_API_KEY = 'k';
     const r = await request(createApp({ fetchImpl: geminiReply({}, 429) })).post('/api/negotiate').send({ input: demo });

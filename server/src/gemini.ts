@@ -251,7 +251,8 @@ async function buildProposal(input: AnalysisInput, fetchImpl: Fetch) {
   const adv = clampInt(raw.suggestedAdvancePercent, 0, 100, input.advancePercent);
   const ms = clampInt(raw.suggestedMilestonePercent, 0, 100 - adv, 0);
   const pay = clampInt(raw.suggestedPaymentDays, 1, 730, input.paymentDays);
-  const msDays = ms > 0 ? clampInt(raw.suggestedMilestoneDays, 0, pay, Math.min(30, pay)) : 0;
+  // A milestone "on day 0" is just more advance; models sometimes omit the day, so default to day 30 (or the final day if sooner).
+  const msDays = ms > 0 ? (Number(raw.suggestedMilestoneDays) >= 1 ? clampInt(raw.suggestedMilestoneDays, 1, pay, pay) : Math.min(30, pay)) : 0;
   const proposal: Proposal = {
     riskSummary: summary,
     biggestRisk: str(raw.biggestRisk),
